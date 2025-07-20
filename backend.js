@@ -4,8 +4,10 @@ import { GraphQLError } from 'graphql'
 import mongoose from 'mongoose'
 import Author from './models/authorModel.js'
 import Book from './models/bookModel.js'
+import User from './models/userModel.js'
 
 import dotenv from 'dotenv'
+import userModel from './models/userModel.js'
 dotenv.config()
 
 const MONGODB_URI = process.env.MONGODB_URI
@@ -129,6 +131,21 @@ let books = [
 */
 
 const typeDefs = `
+
+    type User {
+        username: String!
+        favoriteGenre: String!
+        id: ID!
+    }
+
+    type Token {
+        value: String!
+    }
+
+    type FavoriteGenre {
+        genre: String!
+    }
+
     type Book {
         title: String!
         published: Int!
@@ -156,6 +173,17 @@ const typeDefs = `
             name: String!
             setBornTo: Int!
         ): Author
+        createUser(
+            username: String!
+            favoriteGenre: String!
+        ): User!
+        login(
+            username: String!
+            password: String!
+        ): Token
+        setFavoriteGenre(
+            genre: String!
+        ): User
     }
 
     type Query {
@@ -165,11 +193,18 @@ const typeDefs = `
         allBooks(author: String, genre: String): [Book]
         allAuthors: [Author]
         findPerson(name: String!): Author
+        me: User
     }
 `
 
 const resolvers = {
     Query: {
+        me: async (root, args, context) => {
+            if (!context.currentUser) {
+                return null;
+            }
+            return await User.findById(context.currentUser.id);
+        },
         bookCount: async () => Book.collection.countDocuments(),
         authorCount: async () => Author.collection.countDocuments(),
         allBooks: async (_, args) => {
@@ -278,8 +313,65 @@ const resolvers = {
                 }
                 throw error;
             }
+        },
+        login: async (root, args) => {
+            const { username, password } = args;
+
+            // Here you would typically validate the username and password against your user database
+            // For simplicity, we are assuming a successful login with a static token
+            if (username === 'testuser' && password === 'password') {
+                return { value: 'dummy-token' }; // Replace with actual token generation logic
+            }
+
+            throw new GraphQLError('Invalid credentials', {
+                extensions: {
+                    code: 'UNAUTHENTICATED',
+                }
+            });
+        },
+        createUser: async (root, args) => {
+            const user = new userModel({ username: args.username, favoriteGenre: args.favoriteGenre });
+            return await user.save();
+        },
+        setFavoriteGenre: async (root, args, context) => {
+            if (!context.currentUser) {
+                throw new GraphQLError('Not authenticated', {
+                    extensions: {
+                        code: 'UNAUTHENTICATED',
+                    }
+                });
+            }
+
+            try {
+                const updatedUser = await User.findByIdAndUpdate(
+                    context.currentUser.id,
+                    { favoriteGenre: args.genre },
+                    { new: true, runValidators: true }
+                );
+
+                if (!updatedUser) {
+                    throw new GraphQLError('User not found', {
+                        extensions: {
+                            code: 'BAD_USER_INPUT',
+                        }
+                    });
+                }
+
+                return updatedUser;
+            } catch (error) {
+                if (error.name === 'ValidationError') {
+                    const messages = Object.values(error.errors).map(err => err.message);
+                    throw new GraphQLError(`User validation failed: ${messages.join(', ')}`, {
+                        extensions: {
+                            code: 'BAD_USER_INPUT',
+                            invalidArgs: args,
+                        }
+                    });
+                }
+                throw error;
+            }
         }
-    }
+    },
 }
 
 
@@ -290,6 +382,18 @@ const server = new ApolloServer({
 
 startStandaloneServer(server, {
     listen: { port: 4000 },
+    context: async ({ req }) => {
+        const auth = req ? req.headers.authorization : null;
+        if (auth && auth.toLowerCase().startsWith('bearer ')) {
+            const token = auth.substring(7);
+            // For simplicity, we'll use a dummy user for the token "dummy-token"
+            if (token === 'dummy-token') {
+                const currentUser = await User.findOne({ username: 'testuser' });
+                return { currentUser };
+            }
+        }
+        return {};
+    }
 }).then(({ url }) => {
     console.log(`Server ready at ${url}`)
 })

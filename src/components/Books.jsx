@@ -1,7 +1,14 @@
-const Books = ({ show, books }) => {
+const Books = ({ show, books, setGenre, allBooks }) => {
+
   if (!show) {
     return null
   }
+  const genres = allBooks?.flatMap(book => book.genres).filter((v, i, a) => a.indexOf(v) === i);
+  const genreList = genres.map((genre, index) => (
+    <button key={index} onClick={() => setGenre(genre)}>
+      {genre}
+    </button>
+  ));
 
   return (
     <div>
@@ -23,6 +30,8 @@ const Books = ({ show, books }) => {
           ))}
         </tbody>
       </table>
+      <ul>{genreList}</ul>
+
     </div>
   )
 }

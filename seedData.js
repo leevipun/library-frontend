@@ -2,122 +2,120 @@ import mongoose from 'mongoose'
 import dotenv from 'dotenv'
 import Author from './models/authorModel.js'
 import Book from './models/bookModel.js'
+import User from './models/userModel.js'
 
 dotenv.config()
 
 const MONGODB_URI = process.env.MONGODB_URI
 
-// Authors data from backend.js
-const authorsData = [
-    {
-        name: 'Robert Martin',
-        born: 1952,
-    },
-    {
-        name: 'Martin Fowler',
-        born: 1963
-    },
-    {
-        name: 'Fyodor Dostoevsky',
-        born: 1821
-    },
-    {
-        name: 'Joshua Kerievsky', // birthyear not known
-    },
-    {
-        name: 'Sandi Metz', // birthyear not known
-    },
-]
+console.log('connecting to', MONGODB_URI)
 
-// Books data from backend.js
-const booksData = [
-    {
-        title: 'Clean Code',
-        published: 2008,
-        author: 'Robert Martin',
-        genres: ['refactoring']
-    },
-    {
-        title: 'Agile software development',
-        published: 2002,
-        author: 'Robert Martin',
-        genres: ['agile', 'patterns', 'design']
-    },
-    {
-        title: 'Refactoring, edition 2',
-        published: 2018,
-        author: 'Martin Fowler',
-        genres: ['refactoring']
-    },
-    {
-        title: 'Refactoring to patterns',
-        published: 2008,
-        author: 'Joshua Kerievsky',
-        genres: ['refactoring', 'patterns']
-    },
-    {
-        title: 'Practical Object-Oriented Design, An Agile Primer Using Ruby',
-        published: 2012,
-        author: 'Sandi Metz',
-        genres: ['refactoring', 'design']
-    },
-    {
-        title: 'Crime and punishment',
-        published: 1866,
-        author: 'Fyodor Dostoevsky',
-        genres: ['classic', 'crime']
-    },
-    {
-        title: 'Demons',
-        published: 1872,
-        author: 'Fyodor Dostoevsky',
-        genres: ['classic', 'revolution']
-    },
-]
+mongoose.set('strictQuery', false)
 
-async function seedDatabase() {
+const connectDB = async () => {
     try {
-        console.log('Connecting to MongoDB...')
         await mongoose.connect(MONGODB_URI, {
             serverSelectionTimeoutMS: 30000,
             socketTimeoutMS: 45000,
             maxPoolSize: 10,
         })
-        console.log('Connected to MongoDB')
+        console.log('connected to MongoDB')
+    } catch (error) {
+        console.log('error connecting to MongoDB:', error.message)
+        process.exit(1)
+    }
+}
+
+const seedDatabase = async () => {
+    try {
+        await connectDB()
 
         // Clear existing data
         console.log('Clearing existing data...')
-        await Book.deleteMany({})
+        await User.deleteMany({})
         await Author.deleteMany({})
+        await Book.deleteMany({})
         console.log('Existing data cleared')
 
-        // Create authors first
-        console.log('Creating authors...')
-        const createdAuthors = await Author.insertMany(authorsData)
-        console.log(`Created ${createdAuthors.length} authors`)
-
-        // Create a mapping of author names to their ObjectIds
-        const authorMap = {}
-        createdAuthors.forEach(author => {
-            authorMap[author.name] = author._id
+        // Create test user with favorite genre
+        console.log('Creating test user...')
+        const testUser = new User({
+            username: 'testuser',
+            password: 'password',
+            favoriteGenre: 'refactoring'
         })
+        await testUser.save()
+        console.log('Test user created with username: testuser, password: password, favorite genre: refactoring')
 
-        // Create books with proper author references
+        // Create authors
+        console.log('Creating authors...')
+        const authors = [
+            { name: 'Robert Martin', born: 1952 },
+            { name: 'Martin Fowler', born: 1963 },
+            { name: 'Fyodor Dostoevsky', born: 1821 },
+            { name: 'Joshua Kerievsky' },
+            { name: 'Sandi Metz' },
+        ]
+
+        const savedAuthors = await Author.insertMany(authors)
+        console.log(`Created ${savedAuthors.length} authors`)
+
+        // Create books
         console.log('Creating books...')
-        const booksWithAuthorIds = booksData.map(book => ({
-            ...book,
-            author: authorMap[book.author]
-        }))
+        const books = [
+            {
+                title: 'Clean Code',
+                published: 2008,
+                author: savedAuthors.find(a => a.name === 'Robert Martin')._id,
+                genres: ['refactoring']
+            },
+            {
+                title: 'Agile software development',
+                published: 2002,
+                author: savedAuthors.find(a => a.name === 'Robert Martin')._id,
+                genres: ['agile', 'patterns', 'design']
+            },
+            {
+                title: 'Refactoring, edition 2',
+                published: 2018,
+                author: savedAuthors.find(a => a.name === 'Martin Fowler')._id,
+                genres: ['refactoring']
+            },
+            {
+                title: 'Refactoring to patterns',
+                published: 2008,
+                author: savedAuthors.find(a => a.name === 'Joshua Kerievsky')._id,
+                genres: ['refactoring', 'patterns']
+            },
+            {
+                title: 'Practical Object-Oriented Design, An Agile Primer Using Ruby',
+                published: 2012,
+                author: savedAuthors.find(a => a.name === 'Sandi Metz')._id,
+                genres: ['refactoring', 'design']
+            },
+            {
+                title: 'Crime and punishment',
+                published: 1866,
+                author: savedAuthors.find(a => a.name === 'Fyodor Dostoevsky')._id,
+                genres: ['classic', 'crime']
+            },
+            {
+                title: 'Demons',
+                published: 1872,
+                author: savedAuthors.find(a => a.name === 'Fyodor Dostoevsky')._id,
+                genres: ['classic', 'revolution']
+            },
+        ]
 
-        const createdBooks = await Book.insertMany(booksWithAuthorIds)
+        const createdBooks = await Book.insertMany(books)
         console.log(`Created ${createdBooks.length} books`)
 
-        console.log('Database seeded successfully!')
+        console.log('Seed data created successfully!')
 
     } catch (error) {
         console.error('Error seeding database:', error)
     } finally {
-        await mongoose.connection.close()
+        mongoose.connection.close()
         console.log('Database connection closed')
     }
 }

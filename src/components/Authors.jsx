@@ -49,7 +49,8 @@ const Authors = ({ show, authors }) => {
       await updateBornYear({
         variables: {
           name: selectedAuthor,
-          setBornTo: parseInt(born)
+          setBornTo: parseInt(born),
+          token: localStorage.getItem('library-user-token') // Assuming you store the token in localStorage
         }
       })
       setBorn('')
