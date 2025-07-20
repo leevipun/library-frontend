@@ -11,6 +11,7 @@ const ALL_AUTHORS = gql`
       name
       born
       bookCount
+      id
     }
   }
 `
@@ -19,9 +20,13 @@ const ALL_BOOKS = gql`
   query {
     allBooks {
       title
-      author
+      author {
+        name
+        id
+      }
       published
       genres
+      id
     }
   }
 `
